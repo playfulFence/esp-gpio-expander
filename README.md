@@ -11,7 +11,7 @@ For this example I took a classic pushbutton and tried to connect it with Espres
 
 ## Build and flash
 
-**Warning**
+> **Warning**
 Choose the corresponding options for your chip in `Cargo.toml`
 
 ### Build for ESP32-S3-USB-OTG
