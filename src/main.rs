@@ -1,7 +1,16 @@
 #![no_std]
 #![no_main]
 
-use esp32c3_hal::{
+#[cfg(feature="esp32")]
+use esp32_hal as hal;
+#[cfg(feature="esp32s2")]
+use esp32s2_hal as hal;
+#[cfg(feature="esp32s3")]
+use esp32s3_hal as hal;
+#[cfg(feature="esp32c3")]
+use esp32c3_hal as hal;
+
+use hal::{
     clock::ClockControl,
     pac::Peripherals,
     gpio_types::*,
@@ -95,12 +104,20 @@ impl ExtendedButton{
     }
 }
 
+#[cfg(feature="xtensa-lx-rt")]
+use xtensa_lx_rt::entry;
+#[cfg(feature="riscv-rt")]
 use riscv_rt::entry;
 
 #[entry]
 fn main() -> ! {
     let peripherals = Peripherals::take().unwrap();
+
+     #[cfg(any(feature = "esp32"))]
+    let mut system = peripherals.DPORT.split();
+    #[cfg(any(feature = "esp32s2", feature = "esp32s3", feature = "esp32c3"))]
     let mut system = peripherals.SYSTEM.split();
+
     let clocks = ClockControl::boot_defaults(system.clock_control).freeze();
 
     let timer_group0 = TimerGroup::new(peripherals.TIMG0, &clocks);
@@ -114,15 +131,36 @@ fn main() -> ! {
     let io = IO::new(peripherals.GPIO, peripherals.IO_MUX);
     let mut delay = Delay::new(&clocks);
     
-
+    #[cfg(any(feature = "esp32s3", feature = "esp32c3"))]
     let mut i2c = I2C::new(
         peripherals.I2C0,
         io.pins.gpio1,
         io.pins.gpio2,
-        400u32.kHz(),
+        100u32.kHz(),
         &mut system.peripheral_clock_control,
         &clocks,
     ).unwrap();
+
+    #[cfg(feature="esp32s2")]
+    let mut i2c = I2C::new(
+        peripherals.I2C0,
+        io.pins.gpio35,
+        io.pins.gpio36,
+        100u32.kHz(),
+        &mut system.peripheral_clock_control,
+        &clocks,
+    ).unwrap();
+
+    #[cfg(feature="esp32")]
+    let mut i2c = I2C::new(
+        peripherals.I2C0,
+        io.pins.gpio32,
+        io.pins.gpio33,
+        100u32.kHz(),
+        &mut system.peripheral_clock_control,
+        &clocks,
+    ).unwrap();
+
 
     let mut extend = Mcp230xx::new_default(i2c).unwrap();
     extend.set_direction(Mcp23017::A1, Direction::Input).unwrap();
@@ -134,9 +172,6 @@ fn main() -> ! {
     
     loop {
         if let Event::Pressed = button.poll_pin(&mut extend, &mut delay)
-        {
-            println!("Pressed({})",cnt);
-            cnt += 1;
-        }
+        {   println!("Pressed({})",cnt); cnt += 1;  }
     }
 }
